@@ -57,9 +57,12 @@
         .file-input-wrapper {
             position: relative;
             display: inline-block;
+            cursor: pointer;
         }
         .file-input-wrapper input[type=file] {
             position: absolute;
+            left: 0;
+            top: 0;
             opacity: 0;
             width: 100%;
             height: 100%;
@@ -74,8 +77,9 @@
             font-size: 1.1em;
             cursor: pointer;
             transition: transform 0.2s;
+            pointer-events: none;
         }
-        .file-input-wrapper button:hover {
+        .file-input-wrapper:hover button {
             transform: translateY(-2px);
         }
         .params-grid {
@@ -186,6 +190,17 @@
             color: #667eea;
             font-weight: 600;
         }
+        .error-message {
+            background: #ff4757;
+            color: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .error-message.active {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -196,13 +211,15 @@
         </div>
         
         <div class="content">
+            <div class="error-message" id="errorMessage"></div>
+
             <div class="upload-section">
                 <h2>📁 Cargar Archivo CSV</h2>
-                <p style="margin: 15px 0; color: #666;">Formato: fecha, precio, volumen, etc.</p>
-                <div class="file-input-wrapper">
-                    <button>Seleccionar Archivo</button>
+                <p style="margin: 15px 0; color: #666;">Formato: trade_date, open, high, low, close, pct_chg, etc.</p>
+                <label for="fileInput" class="file-input-wrapper">
+                    <button type="button">Seleccionar Archivo</button>
                     <input type="file" id="fileInput" accept=".csv">
-                </div>
+                </label>
                 <div class="file-name" id="fileName"></div>
             </div>
 
@@ -252,32 +269,58 @@
         const predictBtn = document.getElementById('predictBtn');
         const loading = document.getElementById('loading');
         const results = document.getElementById('results');
+        const errorMessage = document.getElementById('errorMessage');
         let selectedFile = null;
+
+        function showError(message) {
+            errorMessage.textContent = '❌ ' + message;
+            errorMessage.classList.add('active');
+            setTimeout(() => {
+                errorMessage.classList.remove('active');
+            }, 5000);
+        }
 
         fileInput.addEventListener('change', (e) => {
             selectedFile = e.target.files[0];
             if (selectedFile) {
+                if (!selectedFile.name.endsWith('.csv')) {
+                    showError('Por favor selecciona un archivo CSV válido');
+                    selectedFile = null;
+                    fileName.textContent = '';
+                    predictBtn.disabled = true;
+                    return;
+                }
                 fileName.textContent = `✓ ${selectedFile.name}`;
                 predictBtn.disabled = false;
+                console.log('Archivo seleccionado:', selectedFile.name);
             }
         });
 
         predictBtn.addEventListener('click', async () => {
-            if (!selectedFile) return;
+            if (!selectedFile) {
+                showError('Por favor selecciona un archivo CSV primero');
+                return;
+            }
 
             const formData = new FormData();
             formData.append('file', selectedFile);
-            formData.append('params', JSON.stringify({
+            
+            const params = {
                 n_test: parseInt(document.getElementById('nTest').value),
                 epochs: parseInt(document.getElementById('epochs').value),
                 hidden_dim: parseInt(document.getElementById('hiddenDim').value),
                 n_layers: parseInt(document.getElementById('nLayers').value),
                 lr: parseFloat(document.getElementById('lr').value)
-            }));
+            };
+            
+            formData.append('params', JSON.stringify(params));
+
+            console.log('Enviando predicción con parámetros:', params);
 
             predictBtn.disabled = true;
             loading.classList.add('active');
             results.classList.remove('active');
+            errorMessage.classList.remove('active');
 
             try {
                 const response = await fetch('/predict/', {
@@ -286,14 +329,17 @@
                 });
 
                 const data = await response.json();
+                console.log('Respuesta recibida:', data);
 
                 if (data.success) {
                     showResults(data);
                 } else {
-                    alert('Error: ' + data.error);
+                    showError(data.error || 'Error desconocido al procesar el archivo');
+                    console.error('Error del servidor:', data.error);
                 }
             } catch (error) {
-                alert('Error: ' + error.message);
+                showError('Error de conexión: ' + error.message);
+                console.error('Error:', error);
             } finally {
                 loading.classList.remove('active');
                 predictBtn.disabled = false;
@@ -305,15 +351,15 @@
             metricsDiv.innerHTML = `
                 <div class="metric-card">
                     <h3>MSE</h3>
-                    <div class="value">${data.metrics.mse.toFixed(4)}</div>
+                    <div class="value">${data.metrics.mse.toFixed(6)}</div>
                 </div>
                 <div class="metric-card">
                     <h3>RMSE</h3>
-                    <div class="value">${data.metrics.rmse.toFixed(4)}</div>
+                    <div class="value">${data.metrics.rmse.toFixed(6)}</div>
                 </div>
                 <div class="metric-card">
                     <h3>MAE</h3>
-                    <div class="value">${data.metrics.mae.toFixed(4)}</div>
+                    <div class="value">${data.metrics.mae.toFixed(6)}</div>
                 </div>
                 <div class="metric-card">
                     <h3>R²</h3>
@@ -334,26 +380,32 @@
                             data: data.actual_prices,
                             borderColor: '#667eea',
                             backgroundColor: 'rgba(102, 126, 234, 0.1)',
-                            tension: 0.4
+                            tension: 0.4,
+                            borderWidth: 2
                         },
                         {
                             label: 'Precio Predicho',
                             data: data.predicted_prices,
                             borderColor: '#764ba2',
                             backgroundColor: 'rgba(118, 75, 162, 0.1)',
-                            tension: 0.4
+                            tension: 0.4,
+                            borderWidth: 2
                         }
                     ]
                 },
                 options: {
                     responsive: true,
+                    maintainAspectRatio: true,
                     plugins: {
                         legend: {
                             position: 'top',
                         },
                         title: {
                             display: true,
-                            text: 'Comparación Precio Real vs Predicho'
+                            text: 'Comparación Precio Real vs Predicho',
+                            font: {
+                                size: 16
+                            }
                         }
                     },
                     scales: {
@@ -362,6 +414,9 @@
                             title: {
                                 display: true,
                                 text: 'Fecha'
+                            },
+                            ticks: {
+                                maxTicksLimit: 10
                             }
                         },
                         y: {
@@ -376,6 +431,7 @@
             });
 
             results.classList.add('active');
+            console.log('Resultados mostrados correctamente');
         }
     </script>
 </body>
