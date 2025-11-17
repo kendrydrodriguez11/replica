@@ -1,0 +1,167 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Mental Health Prediction{% endblock %}
+
+{% block content %}
+<div class="prediction-container">
+    <h1 class="prediction-title">Mental Health Self-Assessment</h1>
+    
+    <form method="POST" class="prediction-form" id="predictionForm">
+        {% csrf_token %}
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="age">Age</label>
+                <input type="number" id="age" name="age" class="form-input" min="10" max="120" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="gender">Gender</label>
+                <select id="gender" name="gender" class="form-select" required>
+                    <option value="">Select Gender</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                    <option value="other">Other</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="depression">Depression Level (1-10)</label>
+                <input type="number" id="depression" name="depression" class="form-input" min="1" max="10" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="anxiety">Anxiety Level (1-10)</label>
+                <input type="number" id="anxiety" name="anxiety" class="form-input" min="1" max="10" required>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="sleep">Sleep Hours per Night</label>
+                <input type="number" id="sleep" name="sleep" class="form-input" min="0" max="24" step="0.5" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="stress">Stress Level (1-10)</label>
+                <input type="number" id="stress" name="stress" class="form-input" min="1" max="10" required>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="social_support">Social Support (1-10)</label>
+                <input type="number" id="social_support" name="social_support" class="form-input" min="1" max="10" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="physical_activity">Physical Activity (hours/week)</label>
+                <input type="number" id="physical_activity" name="physical_activity" class="form-input" min="0" max="40" step="0.5" required>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group">
+                <label for="substance_use">Substance Use</label>
+                <select id="substance_use" name="substance_use" class="form-select" required>
+                    <option value="">Select Option</option>
+                    <option value="none">None</option>
+                    <option value="occasional">Occasional</option>
+                    <option value="frequent">Frequent</option>
+                </select>
+            </div>
+            
+            <div class="form-group">
+                <label for="family_history">Family History of Mental Illness</label>
+                <select id="family_history" name="family_history" class="form-select" required>
+                    <option value="">Select Option</option>
+                    <option value="yes">Yes</option>
+                    <option value="no">No</option>
+                </select>
+            </div>
+        </div>
+        
+        <div class="form-row">
+            <div class="form-group full-width">
+                <label for="symptoms">Additional Symptoms (Optional)</label>
+                <textarea id="symptoms" name="symptoms" class="form-input" rows="4" placeholder="Describe any additional symptoms you're experiencing..."></textarea>
+            </div>
+        </div>
+        
+        <button type="submit" class="btn-predict">Predict Mental Health Status</button>
+    </form>
+    
+    <!-- Resultado de predicción -->
+    <div id="predictionResult" style="display: none; margin-top: 40px;">
+        <div style="background: rgba(255, 255, 255, 0.1); backdrop-filter: blur(10px); padding: 40px; border-radius: 20px; text-align: center; max-width: 800px; margin: 0 auto;">
+            <h2 style="color: #00d4ff; font-size: 2rem; margin-bottom: 20px;">Prediction Result:</h2>
+            <h3 id="resultStatus" style="color: white; font-size: 1.5rem; margin-bottom: 30px;"></h3>
+            
+            <div style="background: rgba(0, 0, 0, 0.3); padding: 30px; border-radius: 15px; margin-bottom: 20px;">
+                <h3 style="color: #00d4ff; margin-bottom: 15px;">Guidance:</h3>
+                <p id="resultGuidance" style="color: white; line-height: 1.8; font-size: 1.1rem;"></p>
+            </div>
+            
+            <a href="{% url 'replica:chatbot' %}" class="btn btn-primary" style="display: inline-block; margin-top: 20px;">Talk to Chatbot</a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('predictionForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Obtener valores
+    const depression = parseInt(document.getElementById('depression').value);
+    const anxiety = parseInt(document.getElementById('anxiety').value);
+    const stress = parseInt(document.getElementById('stress').value);
+    const sleep = parseFloat(document.getElementById('sleep').value);
+    const socialSupport = parseInt(document.getElementById('social_support').value);
+    const physicalActivity = parseFloat(document.getElementById('physical_activity').value);
+    
+    // Algoritmo simple de predicción
+    let score = 0;
+    
+    // Factores negativos
+    score += depression * 2;
+    score += anxiety * 2;
+    score += stress * 1.5;
+    
+    // Factores positivos (restan del score)
+    score -= socialSupport * 1.5;
+    score -= physicalActivity * 0.5;
+    
+    // Penalización por sueño inadecuado
+    if (sleep < 6 || sleep > 9) {
+        score += 5;
+    }
+    
+    // Determinar resultado
+    let status, guidance;
+    
+    if (score < 15) {
+        status = "You seem to be doing well";
+        guidance = "Your mental health appears to be in good shape. Continue maintaining healthy habits like regular exercise, good sleep, and strong social connections.";
+    } else if (score < 30) {
+        status = "You may need some support";
+        guidance = "You may be experiencing some mental health challenges. It's important to reach out for support from a mental health professional. Remember, you are not alone, and there are many resources available to help you through this.";
+    } else {
+        status = "You May Need Support";
+        guidance = "You may be experiencing some mental health challenges. It's important to reach out for support from a mental health professional. Remember, you are not alone, and there are many resources available to help you through this.";
+    }
+    
+    // Mostrar resultado
+    document.getElementById('resultStatus').textContent = status;
+    document.getElementById('resultGuidance').textContent = guidance;
+    document.getElementById('predictionResult').style.display = 'block';
+    
+    // Scroll al resultado
+    document.getElementById('predictionResult').scrollIntoView({ behavior: 'smooth' });
+});
+</script>
+{% endblock %}
